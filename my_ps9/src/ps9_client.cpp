@@ -65,7 +65,7 @@ void set_gasket_object_frames(geometry_msgs::PoseStamped &object_poseStamped,
     object_poseStamped.header.frame_id = "system_ref_frame"; //set object pose; ref frame must be connected via tf
     object_poseStamped.pose.position.x = 0.0;
     object_poseStamped.pose.position.y = 1.2;
-    object_poseStamped.pose.position.z = 1.5; //-0.125; //pose w/rt world frame
+    object_poseStamped.pose.position.z = 1.0; //-0.125; //pose w/rt world frame
     object_poseStamped.pose.orientation.x = 0;
     object_poseStamped.pose.orientation.y = 0;
     object_poseStamped.pose.orientation.z = 0.0;

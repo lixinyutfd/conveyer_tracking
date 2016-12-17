@@ -12,8 +12,9 @@
 using namespace std; 
 
 ObjectGrabber::ObjectGrabber(ros::NodeHandle* nodehandle) : nh_(*nodehandle),
-object_grabber_as_(nh_, "object_grabber_action_service", boost::bind(&ObjectGrabber::executeCB, this, _1), false),
- cart_move_action_client_("cartMoveActionServer", true) {
+object_grabber_as_(nh_, "object_grabber_action_service", boost::bind(&ObjectGrabber::executeCB, this, _1), false)
+// cart_move_action_client_("cartMoveActionServer", true) 
+{
     ROS_INFO("in constructor of ObjectGrabber");
     //find out what type of gripper we have:
     if (!get_gripper_id()) {

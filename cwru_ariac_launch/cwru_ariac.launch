@@ -1,5 +1,5 @@
  <launch>
-  <node pkg="cartesian_planner" type="ur10_cart_move_as" name="ur10_cart_move_as" output="screen"/>
+  <!--node pkg="cartesian_planner" type="ur10_cart_move_as" name="ur10_cart_move_as" output="screen"/-->
   <!--node pkg="rviz" type="rviz" name="rviz" args="-d $(find ur10_launch)/ur10_grabber.rviz"/--> 
   <include file="$(find cartesian_planner)/launch/ur10_static_transforms.launch"/>
  

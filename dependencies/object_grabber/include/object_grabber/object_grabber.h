@@ -91,7 +91,7 @@ private:
 
              
     actionlib::SimpleActionServer<object_grabber::object_grabberAction> object_grabber_as_;
-    actionlib::SimpleActionClient<cartesian_planner::cart_moveAction> cart_move_action_client_;
+    //actionlib::SimpleActionClient<cartesian_planner::cart_moveAction> cart_move_action_client_;
     void cartMoveDoneCb_(const actionlib::SimpleClientGoalState& state,
         const cartesian_planner::cart_moveResultConstPtr& result);
     //this is a complex fnc that interacts with the object_manipulation_query_svc

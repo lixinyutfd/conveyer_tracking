@@ -32,12 +32,14 @@
 Eigen::VectorXd g_q_vec_arm_Xd;
 vector<int> g_arm_joint_indices;
 vector<string> g_ur_jnt_names;
+ros::Publisher traj_pub;
 const double SPEED_SCALE_FACTOR=1.0; //increase this to slow down motions
 
 const double ARM_ERR_TOL = 0.1; // tolerance btwn last joint commands and current arm pose
 // used to decide if last command is good start point for new path
 
 const double dt_traj = 0.02; // time step for trajectory interpolation
+
 
 bool g_js_doneCb_flag = true;
 void set_ur_jnt_names() {
@@ -71,10 +73,11 @@ void stuff_trajectory(std::vector<Eigen::VectorXd> qvecs, trajectory_msgs::Joint
 
     new_trajectory.points.clear(); // can clear components, but not entire trajectory_msgs
     new_trajectory.joint_names.clear();
+    //stuffing names;
     for (int i = 0; i < VECTOR_DIM; i++) {
         new_trajectory.joint_names.push_back(g_ur_jnt_names[i].c_str());
     }
-
+    new_trajectory.joint_names.push_back("linear_arm_actuator_joint");
     //try imposing a time delay on first point to work around ros_controller complaints
     double t_start=0.05;
 
@@ -92,6 +95,8 @@ void stuff_trajectory(std::vector<Eigen::VectorXd> qvecs, trajectory_msgs::Joint
     for (int i = 0; i < VECTOR_DIM; i++) { //pre-sizes positions vector, so can access w/ indices later
         trajectory_point1.positions.push_back(q_start[i]);
     }
+    //set the 6th one to be 0 for first interpolated point;
+    //trajectory_point1.positions[6] = 0;
     new_trajectory.points.push_back(trajectory_point1); // first point of the trajectory
     //add the rest of the points from qvecs
 
@@ -110,9 +115,14 @@ void stuff_trajectory(std::vector<Eigen::VectorXd> qvecs, trajectory_msgs::Joint
         for (int i = 0; i < VECTOR_DIM; i++) { //copy over the joint-command values
             trajectory_point1.positions[i] = q_end[i];
         }
+        //add the 6th to be 0 for everyone;
+        //trajectory_point1.positions[6] = 0;
         //trajectory_point1.positions = q_end;
         trajectory_point1.time_from_start = ros::Duration(net_time);
         new_trajectory.points.push_back(trajectory_point1);
+    }
+    for (int i = 0; i < qvecs.size(); i++){
+        new_trajectory.points[i].positions.push_back(0);
     }
   //display trajectory:
     for (int iq = 1; iq < qvecs.size(); iq++) {
@@ -149,7 +159,7 @@ void map_arm_joint_indices(vector<string> joint_names) {
             }
         }
     }
-    g_arm_joint_indices[5] =5;
+    g_arm_joint_indices[5] =6;
     cout << "VECTOR_DIM" << VECTOR_DIM<<
     cout << "indices of arm joints: " << endl;
     for (int i = 0; i < VECTOR_DIM; i++) {
@@ -188,8 +198,9 @@ private:
  
     
     //actionlib::SimpleActionClient<baxter_trajectory_streamer::trajAction> traj_streamer_action_client_;
-    actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> action_client_;
-    
+    //actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> action_client_;
+    //ros::Publisher traj_pub = traj_pub = nh_.advertise<trajectory_msgs::JointTrajectory>("/ariac/arm/command", 1);
+
     //messages to receive cartesian goals / return results:
     cartesian_planner::cart_moveGoal cart_goal_;
     cartesian_planner::cart_moveResult cart_result_;
@@ -484,9 +495,11 @@ void ArmMotionInterface::executeCB(const actionlib::SimpleActionServer<cartesian
 //CONSTRUCTOR: pass in a node handle and perform initializations (w/ initializers)
 
 ArmMotionInterface::ArmMotionInterface(ros::NodeHandle* nodehandle) : nh_(*nodehandle),
-cart_move_as_(*nodehandle, "cartMoveActionServer", boost::bind(&ArmMotionInterface::executeCB, this, _1), false),
-action_client_("/ariac/arm/follow_joint_trajectory", true)
- { // constructor
+cart_move_as_(*nodehandle, "cartMoveActionServer", boost::bind(&ArmMotionInterface::executeCB, this, _1), false)
+//action_client_("/ariac/arm/follow_joint_trajectory", true)
+//action_client_("/ariac/arm/command", true)
+{
+	 // constructor
     ROS_INFO("in class constructor of ArmMotionInterface");
     g_q_vec_arm_Xd.resize(VECTOR_DIM);
     //initialize variables here, as needed
@@ -556,14 +569,15 @@ action_client_("/ariac/arm/follow_joint_trajectory", true)
 
     // attempt to connect to the server(s):
     ROS_INFO("waiting for arm-control server: ");
-    bool server_exists = action_client_.waitForServer(ros::Duration(1.0));
+    /*bool server_exists = action_client_.waitForServer(ros::Duration(1.0));
     while (!server_exists) {
         ROS_WARN("waiting on arm server...");
         ros::spinOnce();
         ros::Duration(1.0).sleep();
         server_exists = action_client_.waitForServer(ros::Duration(1.0));
     }
-    ROS_INFO("connected to arm action server"); // if here, then we connected to the server;  
+    ROS_INFO("connected to arm action server"); // if here, then we connected to the server;
+    */  
     
     ROS_INFO("getting joint states: ");
     q_vec_ = g_q_vec_arm_Xd;//get_joint_angles(); //
@@ -628,21 +642,33 @@ void ArmMotionInterface::execute_planned_move(void) {
     // convert path to a trajectory:
     //stuff_trajectory(optimal_path_, des_trajectory_);
     des_trajectory_.header.stamp = ros::Time::now();
+    //xinyu
     js_goal_.trajectory = des_trajectory_;
     //computed_arrival_time_ = des_trajectory_.points.back().time_from_start.toSec();
     ROS_INFO("sending action request");
     ROS_INFO("computed arrival time is %f", computed_arrival_time_);
     busy_working_on_a_request_ = true;
     g_js_doneCb_flag = false;
+    //ROS_INFO("here?");
+    cout<<"time from start time: "<<endl;
+    cout<<des_trajectory_.points[1].time_from_start.toSec()<<endl;
     //arm_action_client.sendGoal(goal, &armDoneCb);
-    action_client_.sendGoal(js_goal_, boost::bind(&ArmMotionInterface::armDoneCb_, this, _1, _2)); // we could also name additional callback functions here, if desired
-    ROS_INFO("waiting on trajectory streamer...");
+    //action_client_.sendGoal(js_goal_, boost::bind(&ArmMotionInterface::armDoneCb_, this, _1, _2)); // we could also name additional callback functions here, if desired
+    //stuffing everything to be zero;
+    int n = des_trajectory_.points.size();
+    //for (int i = 0; i<n; i++){
+    //    des_trajectory_.points[i].positions[6] = 0;
+    //}
+    traj_pub.publish(des_trajectory_);
+    //ROS_INFO("des_trajectory_time=%f", des_trajectory_.points[5].time_from_start);
+    
+    /*ROS_INFO("waiting on trajectory streamer...");
     while (!g_js_doneCb_flag) {
         ROS_INFO("...");
         ros::Duration(0.5).sleep();
         ros::spinOnce();
         cout<<"jnt angs: "<<g_q_vec_arm_Xd.transpose()<<endl;
-    }
+    }*.
     //finished_before_timeout_ = traj_streamer_action_client_.waitForResult(ros::Duration(computed_arrival_time_ + 2.0));
     /*
     if (!finished_before_timeout_) {
@@ -655,7 +681,7 @@ void ArmMotionInterface::execute_planned_move(void) {
     cart_result_.return_code = cartesian_planner::cart_moveResult::SUCCESS;
     cart_move_as_.setSucceeded(cart_result_);
     //}
-    path_is_valid_ = false; // reset--require new path before next move
+    /*path_is_valid_ = false; // reset--require new path before next move
     busy_working_on_a_request_ = false;
     //save the last point commanded, for future reference
     std::vector <double> last_pt;
@@ -663,7 +689,8 @@ void ArmMotionInterface::execute_planned_move(void) {
     int njnts = last_pt.size();
     for (int i = 0; i < njnts; i++) {
         last_arm_jnt_cmd_[i] = last_pt[i];
-    }
+    }*/
+    ROS_INFO("Arrive here?");
 }
 
 //version to slow down the trajectory, stretching out time w/ factor "time_stretch_factor"
@@ -838,7 +865,9 @@ bool ArmMotionInterface::plan_path_current_to_goal_dp_xyz() {
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "ur10_cart_move_as");
-    ros::NodeHandle nh; //standard ros node handle   
+    ros::NodeHandle nh; //standard ros node handle 
+    traj_pub = nh.advertise<trajectory_msgs::JointTrajectory>("/ariac/arm/command", 1);
+  
     set_ur_jnt_names();
     ros::Subscriber joint_state_sub = nh.subscribe("/ariac/joint_states", 1, jointStatesCb);
     g_q_vec_arm_Xd.resize(VECTOR_DIM);
